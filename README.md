@@ -2,7 +2,7 @@
 
 # ReForm: Reflective Autoformalization with Prospective Bounded Sequence Optimization
 
-<a href='https://arxiv.org/pdf/2502.06205'><img src='https://img.shields.io/badge/Paper-arXiv-d63031?logo=arxiv&logoColor=white'></a>
+<a href='https://arxiv.org/pdf/2510.24592'><img src='https://img.shields.io/badge/Paper-arXiv-d63031?logo=arxiv&logoColor=white'></a>
 <a href='https://huggingface.co/collections/GuoxinChen/reform'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-0984e3'></a>
 <a href='https://huggingface.co/datasets/GuoxinChen/ConsistencyCheck'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-ConsistencyCheck Bench-00b894'></a>
 </div>
@@ -24,7 +24,7 @@
 
 # 💥 News
 * **[2025-10-29]** 🎉 We release the ReForm paper, models, and ConsistencyCheck benchmark!
-  - 📝 Paper available on [arXiv](https://arxiv.org/pdf/2502.06205)
+  - 📝 Paper available on [arXiv](https://arxiv.org/pdf/2510.24592)
   - 🤗 Models: [ReForm-8B](https://huggingface.co/GuoxinChen/ReForm-8B) and [ReForm-32B](https://huggingface.co/GuoxinChen/ReForm-32B) on Hugging Face
   - 🤗 [ConsistencyCheck benchmark](https://huggingface.co/datasets/GuoxinChen/ConsistencyCheck) for semantic consistency evaluation
 
@@ -70,10 +70,14 @@ The benchmark is constructed from two established mathematical formalization dat
 - [**ProofNet**](https://github.com/zhangir-azerbayev/ProofNet): Azerbayev, Z., Piotrowski, B., Schoelkopf, H., Ayers, E. W., Radev, D., & Avigad, J. (2023). Proofnet: Autoformalizing and formally proving undergraduate-level mathematics. arXiv preprint arXiv:2302.12433.
 
 
-Our annotation process ensures high-quality labels through rigorous expert evaluation.
+### 2. Annotation Protocol
+- Two independent expert annotators compare each formal statement with its natural-language problem.  
+- Disagreements are resolved by a third senior expert.  
+- Each item includes human judgment (`human_check`) and a textual explanation (`human_reason`).  
+- All Lean statements compile successfully to isolate semantic issues.
 
 
-### 2. Data Format
+### 3. Data Format
 
 Each example follows this JSON structure:
 
@@ -111,6 +115,11 @@ During annotation, we identified several problematic informal statements:
 from datasets import load_dataset
 
 dataset = load_dataset("GuoxinChen/ConsistencyCheck")
+
+example = dataset["test"][0]
+print(example["informal_statement"])
+print(example["formal_statement"])
+print(example["human_check"])
 ```
 
 ### 2. Evaluation
@@ -141,22 +150,24 @@ We hope this benchmark will contribute to the broader mathematical formalization
 If you find ReForm useful in your research, please cite our paper and star 🌟 our repo:
 
 ```bibtex
-@article{reform2024,
-  title={ReForm: Reflective Autoformalization with Prospective Bounded Sequence Optimization},
-  author={},
-  journal={arXiv preprint},
-  year={2025},
-  url={https://github.com/}
+@misc{chen2025reform,
+      title={ReForm: Reflective Autoformalization with Prospective Bounded Sequence Optimization}, 
+      author={Guoxin Chen and Jing Wu and Xinjie Chen and Wayne Xin Zhao and Ruihua Song and Chengxi Li and Kai Fan and Dayiheng Liu and Minpeng Liao},
+      year={2025},
+      eprint={2510.24592},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2510.24592}, 
 }
 ```
 
-# 🙏 Acknowledgments
+# ☀️ Acknowledgments
 
 We gratefully acknowledge:
 
 - **Dataset Foundation**: [miniF2F](https://github.com/openai/miniF2F) and [ProofNet](https://github.com/zhangir-azerbayev/ProofNet) for their pioneering formalization datasets
 - **Formal Mathematics**: The Lean community ([Lean](https://lean-lang.org/), [Mathlib](https://github.com/leanprover-community/mathlib4)) for their world-class theorem proving infrastructure  
-- **Training Framework**: [Slime](https://github.com/yourrepo/slime) for the powerful RL framework enabling our PBSO algorithm
+- **Training Framework**: [Slime](https://github.com/THUDM/slime) for the powerful RL framework enabling our PBSO algorithm
 - **Inference Optimization**: [vLLM](https://github.com/vllm-project/vllm) and [SGLang](https://github.com/sgl-project/sglang) for blazing-fast inference capabilities
 
 Special thanks to all contributors and the broader open-source community.
