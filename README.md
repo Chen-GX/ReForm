@@ -20,6 +20,10 @@
   <img src="./images/benchmark_comparison.png" alt="Performance Comparison of ReForm against state-of-the-art models." width="100%">
   <br>
   <sub>Figure 1. Performance Comparison of ReForm against state-of-the-art models.</sub>
+  <br><br><br>
+  <img src="./images/rl.png" alt="RL Dynamics in our PSBO process." width="100%">
+  <br>
+  <sub>Figure 2. RL Dynamics in our PSBO process.</sub>
 </div>
 
 # 💥 News
