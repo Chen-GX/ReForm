@@ -8,7 +8,6 @@
 </div>
 
 **ReForm** is a reflective **Autoformalization** framework that enables LLMs to iteratively generate, validate, and self-correct formal mathematical statements (Lean4) through an integrated generation-validation loop.
-<!-- , achieving state-of-the-art performance with **17.2pp average improvement** over existing methods -->
 
 - **Reflective Autoformalization Paradigm**: Introduces an iterative "generate → validate → refine" cycle that enables models to autonomously identify and correct semantic errors, unifying generation and verification in a single process.
 
@@ -27,9 +26,10 @@
 </div>
 
 # 💥 News
+* **[2025-10-31]** 🎉 We release the [ReForm-32B](https://huggingface.co/GuoxinChen/ReForm-32B) model on Hugging Face, which is more powerful than ReForm-8B.
 * **[2025-10-29]** 🎉 We release the ReForm paper, models, and ConsistencyCheck benchmark!
   - 📝 Paper available on [arXiv](https://arxiv.org/pdf/2510.24592)
-  - 🤗 Models: [ReForm-8B](https://huggingface.co/GuoxinChen/ReForm-8B) and [ReForm-32B](https://huggingface.co/GuoxinChen/ReForm-32B) on Hugging Face
+  - 🤗 Models: [ReForm-8B](https://huggingface.co/GuoxinChen/ReForm-8B) on Hugging Face
   - 🤗 [ConsistencyCheck benchmark](https://huggingface.co/datasets/GuoxinChen/ConsistencyCheck) for semantic consistency evaluation
 
 # 🎯 Quick Start
