@@ -1,0 +1,167 @@
+diff --git a/slime/backends/megatron_utils/data.py b/slime/backends/megatron_utils/data.py
+index ff446088..5d73a49e 100644
+--- a/slime/backends/megatron_utils/data.py
++++ b/slime/backends/megatron_utils/data.py
+@@ -120,7 +120,18 @@ def log_rollout_data(rollout_id, args, rollout_data):
+                     else:
+                         val = val.mean() * cp_size
+                 else:
+-                    val = sum(val) / len(val)
++                    if key in ['rewards', 'raw_reward']:
++                        # track two types of raw reward
++                        task_val = [v[-1] for v in val]
++                        task_val = sum(task_val) / len(task_val)
++                        log_dict[f'task_{key}'] = task_val.item() if isinstance(task_val, torch.Tensor) else task_val
++
++                        # all raw reward
++                        val = [np.mean(v) for v in val]
++                        val = sum(val) / len(val)
++                    else:
++                        val = sum(val) / len(val)
++                    
+             elif isinstance(val, torch.Tensor):
+                 val = val.float().mean()
+             else:
+diff --git a/slime/backends/megatron_utils/loss.py b/slime/backends/megatron_utils/loss.py
+index f73c4b3c..08846e8a 100644
+--- a/slime/backends/megatron_utils/loss.py
++++ b/slime/backends/megatron_utils/loss.py
+@@ -127,36 +127,44 @@ def compute_advantages_and_returns(args, rollout_data):
+             )
+             for i in range(len(log_probs))
+         ]
+-    rewards = torch.tensor(rewards, dtype=torch.float32, device=kl[0].device)
+-
+-    if args.advantage_estimator in ["grpo", "gspo"]:
+-        returns = get_grpo_returns(rewards, kl)
+-        # TODO: is the copy necessary?
+-        advantages = [r for r in returns]
+-
+-    elif args.advantage_estimator == "reinforce_plus_plus":
+-        returns = get_reinforce_plus_plus_returns(
+-            rewards=rewards,
+-            kl=kl,
+-            loss_masks=loss_masks,
+-            response_lengths=response_lengths,
+-            total_lengths=total_lengths,
+-            kl_coef=args.kl_coef,
+-            gamma=args.gamma,
+-        )
+-        advantages = [r for r in returns]
+-
+-    elif args.advantage_estimator == "reinforce_plus_plus_baseline":
+-        advantages = get_reinforce_plus_plus_baseline_advantages(
+-            rewards=rewards,
+-            kl=kl,
+-            loss_masks=loss_masks,
+-            kl_coef=args.kl_coef,
+-        )
+-        returns = advantages
++
++    if args.custom_adv_returns_function_path is not None:
++        compute_adv_returns_function = load_function(args.custom_adv_returns_function_path)
++        tokens: list[torch.Tensor] = rollout_data.get("tokens", None)
++        responses: list[torch.Tensor] = [token[-response_lengths[i]:] for i, token in enumerate(tokens)]
++
++        advantages, returns = compute_adv_returns_function(args, rewards, kl, loss_masks, response_lengths, total_lengths, responses)
+ 
+     else:
+-        raise NotImplementedError(f"advantage_estimator {args.advantage_estimator} is not supported. ")
++        rewards = torch.tensor(rewards, dtype=torch.float32, device=kl[0].device)
++        if args.advantage_estimator in ["grpo", "gspo"]:
++            returns = get_grpo_returns(rewards, kl)
++            # TODO: is the copy necessary?
++            advantages = [r for r in returns]
++
++        elif args.advantage_estimator == "reinforce_plus_plus":
++            returns = get_reinforce_plus_plus_returns(
++                rewards=rewards,
++                kl=kl,
++                loss_masks=loss_masks,
++                response_lengths=response_lengths,
++                total_lengths=total_lengths,
++                kl_coef=args.kl_coef,
++                gamma=args.gamma,
++            )
++            advantages = [r for r in returns]
++
++        elif args.advantage_estimator == "reinforce_plus_plus_baseline":
++            advantages = get_reinforce_plus_plus_baseline_advantages(
++                rewards=rewards,
++                kl=kl,
++                loss_masks=loss_masks,
++                kl_coef=args.kl_coef,
++            )
++            returns = advantages
++
++        else:
++            raise NotImplementedError(f"advantage_estimator {args.advantage_estimator} is not supported. ")
+ 
+     # TODO: OpenRLHF always does advantages normalization but veRL doesn't seem to do it.
+     if args.normalize_advantages:
+diff --git a/slime/backends/utils/data.py b/slime/backends/utils/data.py
+index 9fb106ec..68cd0582 100644
+--- a/slime/backends/utils/data.py
++++ b/slime/backends/utils/data.py
+@@ -207,6 +207,7 @@ def process_rollout_data(args, rollout_data_ref, dp_rank, dp_size):
+         "tokens",
+         "total_lengths",
+         "response_lengths",
++        "raw_reward",
+         "rewards",
+         "truncated",
+         "loss_masks",
+diff --git a/slime/rollout/filter_hub/dynamic_sampling_filters.py b/slime/rollout/filter_hub/dynamic_sampling_filters.py
+index 203acdc3..f8e1ec07 100644
+--- a/slime/rollout/filter_hub/dynamic_sampling_filters.py
++++ b/slime/rollout/filter_hub/dynamic_sampling_filters.py
+@@ -8,3 +8,12 @@ __all__ = ["check_reward_nonzero_std"]
+ def check_reward_nonzero_std(args, samples: list[Sample], **kwargs):
+     rewards = [sample.get_reward_value(args) for sample in samples]
+     return torch.tensor(rewards, dtype=torch.float).std() > 0.0
++
++def check_all_reward_nonzero_std(args, samples: list[Sample], **kwargs):
++    rewards = [sample.get_reward_value(args) for sample in samples]
++    rewards = [reward for sublist in rewards for reward in sublist]
++    return torch.tensor(rewards, dtype=torch.float).std() > 0.0
++
++def check_task_reward_nonzero_std(args, samples: list[Sample], **kwargs):
++    rewards = [sample.get_reward_value(args)[-1] for sample in samples]
++    return torch.tensor(rewards, dtype=torch.float).std() > 0.0
+\ No newline at end of file
+diff --git a/slime/utils/arguments.py b/slime/utils/arguments.py
+index e83e327b..a8a13be0 100644
+--- a/slime/utils/arguments.py
++++ b/slime/utils/arguments.py
+@@ -288,6 +288,31 @@ def get_slime_extra_args_provider(add_custom_arguments=None):
+                     "It may be helpful for updating loss mask."
+                 ),
+             )
++
++            # NEW ADD
++            parser.add_argument(
++                "--custom-adv-returns-function-path",
++                type=str,
++                default=None,
++                help=(
++                    "Only substitue the `def generate(args, sample, sampling_params)` function within the example rollout function. "
++                    "This should be useful if you need to implement some special rollout logic, e.g. multi-turn, function calling."
++                ),
++            )
++            parser.add_argument(
++                "--reward-shaping",
++                type=str,
++                choices=["discounted_with_clip"],
++                default="none",
++                help=(
++                    "reward shaping type: discounted_with_clip"
++                ),
++            )
++            parser.add_argument(
++                "--reward-shaping-gamma",
++                type=float,
++                default=0.25,
++            )
+             return parser
+ 
+         # data

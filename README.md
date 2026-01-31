@@ -5,7 +5,9 @@
 <a href='https://arxiv.org/pdf/2510.24592'><img src='https://img.shields.io/badge/Paper-arXiv-d63031?logo=arxiv&logoColor=white'></a>
 <a href='https://huggingface.co/collections/GuoxinChen/reform'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-0984e3'></a>
 <a href='https://huggingface.co/datasets/GuoxinChen/ConsistencyCheck'><img src='https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-ConsistencyCheck Bench-00b894'></a>
+<a href='https://iclr.cc/'><img src='https://img.shields.io/badge/ICLR-2026-blue'></a>
 </div>
+
 
 **ReForm** is a reflective **Autoformalization** framework that enables LLMs to iteratively generate, validate, and self-correct formal mathematical statements (Lean4) through an integrated generation-validation loop.
 
@@ -26,6 +28,7 @@
 </div>
 
 # 💥 News
+* **[2026-01-31]** 🎉 Our ReForm has been accepted at ICLR 2026 and we have released our RL implementation. Feel free for any question.
 * **[2025-10-31]** 🎉 We release the [ReForm-32B](https://huggingface.co/GuoxinChen/ReForm-32B) model on Hugging Face, which is more powerful than ReForm-8B.
 * **[2025-10-29]** 🎉 We release the ReForm paper, models, and ConsistencyCheck benchmark!
   - 📝 Paper available on [arXiv](https://arxiv.org/pdf/2510.24592)
@@ -59,6 +62,128 @@ python ./script/reform_decode.py \
     --data-path <PATH-to-test>
 ```
 
+# RL Recipe
+
+We use [slime](https://github.com/THUDM/slime) as our RL training framework with custom modifications for PBSO (Prospective Bounded Sequence Optimization). Thanks for their wonderful RL framework ❤️.
+
+## Setup
+
+### 1. Clone with Submodule
+
+```bash
+git clone --recursive https://github.com/YOUR_USERNAME/ReForm.git
+cd ReForm
+```
+
+Or if you've already cloned without `--recursive`:
+
+```bash
+git submodule update --init
+```
+
+### 2. Apply Custom Patch
+
+Our PBSO algorithm requires custom modifications to slime. Apply the patch:
+
+```bash
+cd slime
+git apply ../patch/slime.patch
+```
+
+### 3. Install Dependencies
+
+```bash
+cd slime
+pip install -e .
+```
+
+## What's in the Patch?
+
+The patch (`patch/slime.patch`) contains modifications for multi-step reward handling required by PBSO:
+
+| File | Modification |
+|------|--------------|
+| `slime/utils/arguments.py` | New arguments: `--custom-adv-returns-function-path`, `--reward-shaping`, `--reward-shaping-gamma` |
+| `slime/backends/megatron_utils/loss.py` | Support for custom advantage/returns computation functions |
+| `slime/backends/megatron_utils/data.py` | Multi-step reward logging: `task_rewards` (final step) + average rewards |
+| `slime/backends/utils/data.py` | Added `raw_reward` field for rollout data |
+| `slime/rollout/filter_hub/dynamic_sampling_filters.py` | New filters: `check_all_reward_nonzero_std`, `check_task_reward_nonzero_std` |
+
+## Submodule Version
+
+The slime submodule is pinned to commit `c64c2606` ([#278](https://github.com/THUDM/slime/pull/278)), which is compatible with our PBSO implementation.
+
+## Docker Version
+You can use the docker env (`docker pull slimerl/slime:20250903-v1`) for PBSO.
+
+## Training Pipeline
+
+### Step 1: Convert Checkpoint
+
+Convert your HuggingFace checkpoint to Megatron-Core format:
+
+```bash
+bash hf2mcore/hf2mcore.sh
+```
+
+### Step 2: Launch CriticLean Server
+
+Start the CriticLean server for semantic consistency checking:
+
+```bash
+bash launch_llm/launch_sglang.sh
+```
+
+### Step 3: Run SFT (Optional)
+
+If starting from a base model, run supervised fine-tuning first:
+
+```bash
+bash sft_scripts/qwen3-8B.sh
+```
+
+### Step 4: Run PBSO Training
+
+Run the PBSO reinforcement learning training:
+
+```bash
+bash rl_scripts/qwen3-8B-PBSO.sh
+```
+
+## Directory Structure
+
+```
+ReForm/
+├── lean_plugins/           # Core PBSO implementation
+│   ├── reward.py           # Multi-step reward with discounted propagation
+│   ├── generate.py         # Rollout generation for autoformalization
+│   ├── adv_utils.py        # Advantage/returns computation
+│   ├── verify_utils.py     # Lean 4 verification utilities
+│   ├── format_check.py     # Output format validation
+│   └── critic_lean_prompt.py  # Prompts for semantic consistency checking
+├── rl_scripts/             # RL training scripts
+│   └── qwen3-8B-PBSO.sh    # PBSO training script
+├── sft_scripts/            # SFT training scripts
+│   └── qwen3-8B.sh         # Supervised fine-tuning script
+├── hf2mcore/               # Checkpoint conversion
+│   └── hf2mcore.sh         # HuggingFace to Megatron-Core conversion
+├── launch_llm/             # LLM server launch scripts
+│   └── launch_sglang.sh    # SGLang server for CriticLean
+├── patch/                  # Slime modifications
+│   └── slime.patch         # PBSO patch for slime
+├── slime/                  # Slime submodule (RL framework)
+├── data/                   # Test datasets
+└── script/                 # Inference scripts
+```
+
+## Key PBSO Arguments
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--reward-shaping` | Reward shaping strategy | `discounted_with_clip` |
+| `--reward-shaping-gamma` | Discount factor for reward propagation | `0.5` |
+| `--custom-adv-returns-function-path` | Custom advantage/returns function | `lean_plugins.adv_utils.compute_step_advantages_and_returns` |
+| `--custom-rm-path` | Custom reward function | `lean_plugins.reward.reward_func` |
 
 # 🚀 ConsistencyCheck Benchmark
 
